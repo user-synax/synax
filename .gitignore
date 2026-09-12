@@ -6,3 +6,6 @@ dist/
 
 # Environment
 .env
+
+# App metadata (Freebuff workspace marker)
+.freebuff/

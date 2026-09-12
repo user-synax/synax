@@ -23,13 +23,38 @@ erroring.
 
 No external dependencies are used; everything runs on the Bun standard library.
 
-## Getting started
+## Install
+
+The package ships a `synax` binary and a typed library API:
+
+```sh
+bun add synax          # or: npm install synax
+```
+
+Compile a file with the CLI:
+
+```sh
+synax program.snx                # prints JavaScript to stdout
+synax examples/loop.snx          # ships with the package
+```
+
+Or use it from code:
+
+```ts
+import { generate, Lexer, Parser } from "synax";
+
+const source = 'print "Hello, World!"';
+const js = generate(new Parser(new Lexer(source).tokenize()).parse());
+```
+
+## Getting started (from source)
 
 ```sh
 bun install                       # install dependencies (none yet)
 bun test                          # run the test suite
 bun run src/cli.ts <file>         # compile a Synax source file to stdout
 bun run src/cli.ts examples/loop.snx
+bun run build                     # bundle the CLI and library into dist/
 ```
 
 The compiler prints JavaScript to stdout and diagnostics to stderr, exiting
@@ -54,8 +79,10 @@ There is also a `bun run build` script that bundles the CLI into `dist/`.
 | `src/ast.ts`     | AST node type definitions            |
 | `src/parser.ts`  | Tokens → AST                         |
 | `src/codegen.ts` | AST → JavaScript                     |
+| `src/diagnostics.ts` | Positioned errors → code frames  |
 | `src/cli.ts`     | Command-line entrypoint              |
 | `src/index.ts`   | Public API re-exports                |
 | `examples/`      | Sample `.snx` programs               |
 | `tests/`         | Test suite (`bun test`)              |
 | `SPEC.md`        | Language specification               |
+| `synax.d.ts`     | Type declarations for the published package |
