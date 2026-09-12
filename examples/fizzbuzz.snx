@@ -1,0 +1,34 @@
+# FizzBuzz for 1..15.
+#
+# Synax has no `%` operator, so divisibility is tracked with two counters that
+# wrap around at 3 and 5. After the wrap, a zero counter means "divisible by".
+
+set fizz = 0
+set buzz = 0
+
+for i in 1..15
+    set fizz = fizz + 1
+    set buzz = buzz + 1
+
+    if fizz == 3
+        set fizz = 0
+    end
+
+    if buzz == 5
+        set buzz = 0
+    end
+
+    if fizz == 0
+        if buzz == 0
+            print "FizzBuzz"
+        else
+            print "Fizz"
+        end
+    else
+        if buzz == 0
+            print "Buzz"
+        else
+            print i
+        end
+    end
+end
