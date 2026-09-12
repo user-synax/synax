@@ -1,5 +1,5 @@
 {
-  "name": "synax",
+  "name": "@user-synax/synax",
   "version": "0.0.1",
   "description": "A small scripting language that transpiles to JavaScript.",
   "license": "MIT",
