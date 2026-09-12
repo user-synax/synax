@@ -24,7 +24,11 @@
     // Interop / hygiene.
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    // Ambient declarations for the Bun runtime/test runner. The project has no
+    // dependencies, so these are hand-maintained in types/ambient.d.ts.
+    "types": ["./types/ambient.d.ts"]
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "types"]
 }

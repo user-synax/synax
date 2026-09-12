@@ -30,14 +30,16 @@
     "src",
     "examples",
     "synax.d.ts",
+    "synax.html",
     "README.md",
     "LICENSE",
     "SPEC.md"
   ],
   "scripts": {
     "build": "bun build src/cli.ts src/index.ts --outdir dist --target bun",
+    "docs": "bun run scripts/build-docs.ts",
     "dev": "bun run --watch src/cli.ts",
-    "prepublishOnly": "bun test && bun run build",
+    "prepublishOnly": "bun test && bun run typecheck && bun run build",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

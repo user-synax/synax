@@ -9,8 +9,6 @@
  * line up with the declarations. Zero output and exit 0 means the `.d.ts` is
  * faithful.
  */
-import { $ } from "bun";
-
 const consumer = `
 import {
   formatDiagnostic,

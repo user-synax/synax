@@ -4,7 +4,9 @@ Synax is a custom scripting language that transpiles to JavaScript. You write
 Synax source; the `synax` CLI compiles it down to plain, readable JavaScript.
 
 The language is still being designed — the authoritative description of its
-grammar and semantics lives in [SPEC.md](./SPEC.md).
+grammar and semantics lives in [SPEC.md](./SPEC.md). There is also
+[synax.html](./synax.html): a single-file docs page with a live in-browser
+playground (the whole compiler is inlined — open it, no server needed).
 
 ## Status
 
@@ -55,6 +57,7 @@ bun test                          # run the test suite
 bun run src/cli.ts <file>         # compile a Synax source file to stdout
 bun run src/cli.ts examples/loop.snx
 bun run build                     # bundle the CLI and library into dist/
+bun run docs                      # regenerate synax.html (docs + playground)
 ```
 
 The compiler prints JavaScript to stdout and diagnostics to stderr, exiting
