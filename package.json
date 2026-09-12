@@ -1,0 +1,14 @@
+{
+  "name": "synax",
+  "version": "0.1.0",
+  "description": "A custom scripting language that transpiles to JavaScript.",
+  "type": "module",
+  "private": true,
+  "module": "src/index.ts",
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target bun",
+    "dev": "bun run --watch src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}
