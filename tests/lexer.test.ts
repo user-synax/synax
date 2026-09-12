@@ -20,6 +20,22 @@ function types(source: string): TokenType[] {
   return tokenize(source).map((t) => t.type);
 }
 
+/**
+ * The exact expected shape of a token, including position. Keeps the full-token
+ * assertions below readable now that tokens carry a column.
+ */
+function tok(
+  type: TokenType,
+  lexeme: string,
+  line: number,
+  column: number,
+  value?: string | number,
+): Token {
+  return value === undefined
+    ? { type, lexeme, line, column }
+    : { type, lexeme, value, line, column };
+}
+
 // ---------------------------------------------------------------------------
 // Keywords
 // ---------------------------------------------------------------------------
@@ -39,9 +55,7 @@ describe("keywords", () => {
 
   for (const [text, type] of keywords) {
     test(`"${text}" lexes as ${type}`, () => {
-      expect(tokenize(text)).toEqual([
-        { type, lexeme: text, line: 1 },
-      ]);
+      expect(tokenize(text)).toEqual([tok(type, text, 1, 1)]);
     });
   }
 
@@ -65,9 +79,7 @@ describe("keywords", () => {
 
 describe("identifiers", () => {
   test("lexes a plain identifier", () => {
-    expect(tokenize("name")).toEqual([
-      { type: TokenType.IDENT, lexeme: "name", line: 1 },
-    ]);
+    expect(tokenize("name")).toEqual([tok(TokenType.IDENT, "name", 1, 1)]);
   });
 
   test("allows leading underscores and inner digits", () => {
@@ -81,14 +93,12 @@ describe("identifiers", () => {
 
 describe("numbers", () => {
   test("lexes an integer", () => {
-    expect(tokenize("42")).toEqual([
-      { type: TokenType.NUMBER, lexeme: "42", value: 42, line: 1 },
-    ]);
+    expect(tokenize("42")).toEqual([tok(TokenType.NUMBER, "42", 1, 1, 42)]);
   });
 
   test("lexes a float", () => {
     expect(tokenize("3.14")).toEqual([
-      { type: TokenType.NUMBER, lexeme: "3.14", value: 3.14, line: 1 },
+      tok(TokenType.NUMBER, "3.14", 1, 1, 3.14),
     ]);
   });
 
@@ -113,12 +123,7 @@ describe("numbers", () => {
 describe("strings", () => {
   test("lexes a simple string", () => {
     expect(tokenize('"Hello, World!"')).toEqual([
-      {
-        type: TokenType.STRING,
-        lexeme: '"Hello, World!"',
-        value: "Hello, World!",
-        line: 1,
-      },
+      tok(TokenType.STRING, '"Hello, World!"', 1, 1, "Hello, World!"),
     ]);
   });
 
@@ -132,12 +137,7 @@ describe("strings", () => {
 
   test("does not treat `=`, `,`, `#` or `..` inside a string as tokens", () => {
     expect(tokenize('"a = b, c .. d # e"')).toEqual([
-      {
-        type: TokenType.STRING,
-        lexeme: '"a = b, c .. d # e"',
-        value: "a = b, c .. d # e",
-        line: 1,
-      },
+      tok(TokenType.STRING, '"a = b, c .. d # e"', 1, 1, "a = b, c .. d # e"),
     ]);
   });
 
@@ -328,7 +328,7 @@ describe("structure", () => {
   test("always ends with exactly one EOF token", () => {
     const tokens = new Lexer("").tokenize();
 
-    expect(tokens).toEqual([{ type: TokenType.EOF, lexeme: "", line: 1 }]);
+    expect(tokens).toEqual([tok(TokenType.EOF, "", 1, 1)]);
   });
 
   test("EOF carries an empty lexeme", () => {
@@ -352,6 +352,23 @@ describe("structure", () => {
       4, // NEWLINE
       5, // end
     ]);
+  });
+
+  test("tracks 1-based columns and resets them each line", () => {
+    const tokens = tokenize("set x = 1\nprint x");
+
+    expect(tokens.map((t) => t.column)).toEqual([1, 5, 7, 9, 10, 1, 7]);
+  });
+
+  test("a tab advances the column", () => {
+    // One tab, then `print`: the token starts at column 2.
+    expect(tokenize("\tprint")[0]?.column).toBe(2);
+  });
+
+  test("a two-character operator reports its own column", () => {
+    const gteq = tokenize("a >= 18").find((t) => t.type === TokenType.GTEQ);
+
+    expect(gteq?.column).toBe(3);
   });
 
   test("a `\\r\\n` line break is a single NEWLINE, not two", () => {
@@ -413,34 +430,30 @@ describe("SPEC.md section 8 — If / else example", () => {
     const tokens = tokenize(source);
 
     expect(tokens).toEqual([
-      { type: TokenType.SET, lexeme: "set", line: 1 },
-      { type: TokenType.IDENT, lexeme: "age", line: 1 },
-      { type: TokenType.EQUALS, lexeme: "=", line: 1 },
-      { type: TokenType.NUMBER, lexeme: "19", value: 19, line: 1 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 1 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 2 },
-      { type: TokenType.IF, lexeme: "if", line: 3 },
-      { type: TokenType.IDENT, lexeme: "age", line: 3 },
-      { type: TokenType.GTEQ, lexeme: ">=", line: 3 },
-      { type: TokenType.NUMBER, lexeme: "18", value: 18, line: 3 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 3 },
-      { type: TokenType.PRINT, lexeme: "print", line: 4 },
-      { type: TokenType.STRING, lexeme: '"adult"', value: "adult", line: 4 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 4 },
-      { type: TokenType.ELSE, lexeme: "else", line: 5 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 5 },
-      { type: TokenType.PRINT, lexeme: "print", line: 6 },
-      { type: TokenType.STRING, lexeme: '"minor"', value: "minor", line: 6 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 6 },
-      { type: TokenType.END, lexeme: "end", line: 7 },
-      { type: TokenType.NEWLINE, lexeme: "\n", line: 7 },
+      tok(TokenType.SET, "set", 1, 1),
+      tok(TokenType.IDENT, "age", 1, 5),
+      tok(TokenType.EQUALS, "=", 1, 9),
+      tok(TokenType.NUMBER, "19", 1, 11, 19),
+      tok(TokenType.NEWLINE, "\n", 1, 13),
+      tok(TokenType.NEWLINE, "\n", 2, 1),
+      tok(TokenType.IF, "if", 3, 1),
+      tok(TokenType.IDENT, "age", 3, 4),
+      tok(TokenType.GTEQ, ">=", 3, 8),
+      tok(TokenType.NUMBER, "18", 3, 11, 18),
+      tok(TokenType.NEWLINE, "\n", 3, 13),
+      tok(TokenType.PRINT, "print", 4, 5),
+      tok(TokenType.STRING, '"adult"', 4, 11, "adult"),
+      tok(TokenType.NEWLINE, "\n", 4, 18),
+      tok(TokenType.ELSE, "else", 5, 1),
+      tok(TokenType.NEWLINE, "\n", 5, 5),
+      tok(TokenType.PRINT, "print", 6, 5),
+      tok(TokenType.STRING, '"minor"', 6, 11, "minor"),
+      tok(TokenType.NEWLINE, "\n", 6, 18),
+      tok(TokenType.END, "end", 7, 1),
+      tok(TokenType.NEWLINE, "\n", 7, 4),
     ]);
 
     // ...and exactly one trailing EOF, on the line after the last newline.
-    expect(new Lexer(source).tokenize().at(-1)).toEqual({
-      type: TokenType.EOF,
-      lexeme: "",
-      line: 8,
-    });
+    expect(new Lexer(source).tokenize().at(-1)).toEqual(tok(TokenType.EOF, "", 8, 1));
   });
 });

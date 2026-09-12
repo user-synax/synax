@@ -7,10 +7,19 @@
  *
  * Reads a Synax source file, runs it through the pipeline
  * (`Lexer` -> `Parser` -> `generate`) and writes the resulting JavaScript to
- * stdout. Diagnostics go to stderr with a non-zero exit code, so the CLI is
- * usable from a shell pipeline.
+ * stdout.
+ *
+ * Diagnostics go to stderr as a positioned message plus a code frame, with a
+ * non-zero exit code — never a raw stack trace:
+ *
+ *   examples/bad.snx:1:7: error: Unexpected character "@"
+ *     1 | print @
+ *       |       ^
+ *
+ * Set `SYNAX_DEBUG=1` to include the stack for an internal compiler error.
  */
 import { generate } from "./codegen";
+import { formatDiagnostic } from "./diagnostics";
 import { Lexer, LexerError } from "./lexer";
 import { Parser, ParserError } from "./parser";
 
@@ -21,7 +30,7 @@ export async function main(
 ): Promise<void> {
   const filePath = argv[0];
 
-  if (!filePath) {
+  if (filePath === undefined) {
     console.error(USAGE);
     process.exitCode = 1;
     return;
@@ -30,8 +39,10 @@ export async function main(
   let source: string;
   try {
     source = await Bun.file(filePath).text();
-  } catch {
-    console.error(`synax: cannot read '${filePath}'`);
+  } catch (error) {
+    console.error(
+      `synax: cannot read '${filePath}': ${describeReadFailure(error)}`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -39,19 +50,50 @@ export async function main(
   try {
     const tokens = new Lexer(source).tokenize();
     const ast = new Parser(tokens).parse();
-    // `generate` returns source with no trailing newline; console.log adds one.
     console.log(generate(ast));
   } catch (error) {
-    // Lexer and parser errors already carry a line number in their message,
-    // so prefixing the file is enough to make a usable diagnostic.
+    process.exitCode = 1;
+
+    // Expected diagnostics: a positioned message and a code frame.
     if (error instanceof LexerError || error instanceof ParserError) {
-      console.error(`${filePath}: ${error.message}`);
-      process.exitCode = 1;
+      console.error(
+        formatDiagnostic(
+          {
+            file: filePath,
+            line: error.line,
+            column: error.column,
+            length: error.length,
+            reason: error.reason,
+          },
+          source,
+        ),
+      );
       return;
     }
 
-    throw error;
+    // A bug in the compiler rather than in the input. Keep it to one line by
+    // default so it reads as a diagnostic, not a crash.
+    console.error(`synax: internal error: ${describeError(error)}`);
+    if (process.env["SYNAX_DEBUG"]) console.error(error);
   }
+}
+
+/** Turn a filesystem error into a short, human-readable reason. */
+function describeReadFailure(error: unknown): string {
+  switch ((error as { code?: unknown }).code) {
+    case "ENOENT":
+      return "no such file";
+    case "EISDIR":
+      return "is a directory";
+    case "EACCES":
+      return "permission denied";
+    default:
+      return "could not be read";
+  }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 if (import.meta.main) {

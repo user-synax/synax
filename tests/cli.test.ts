@@ -107,29 +107,47 @@ describe("diagnostics", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("cannot read");
     expect(result.stderr).toContain("does-not-exist.snx");
+    expect(result.stderr).toContain("no such file");
     // A raw stack trace would mean the error escaping the CLI.
-    expect(result.stderr).not.toContain("at ");
+    expect(result.stderr).not.toContain("    at ");
   });
 
-  test("a lexer error is reported with the file and line", () => {
+  test("a lexer error is reported with file:line:column and a code frame", () => {
     const result = cli(`${FIXTURES}/bad-character.snx`);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("bad-character.snx");
-    expect(result.stderr).toContain("Unexpected character");
-    expect(result.stderr).toContain("(line 1)");
+    expect(result.stderr).toContain(
+      'bad-character.snx:1:7: error: Unexpected character "@"',
+    );
+    // The frame shows the offending source line and underlines the character.
+    expect(result.stderr).toContain("  1 | print @");
+    expect(result.stderr).toContain("^");
+    expect(result.stderr).not.toContain("    at ");
   });
 
-  test("a parser error is reported with the file and line", () => {
+  test("a parser error is reported with file:line:column", () => {
     const result = cli(`${FIXTURES}/missing-end.snx`);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("missing-end.snx");
-    expect(result.stderr).toContain("Expected 'end'");
     // The fixture ends with a newline, so the EOF token that `end` is missing
-    // from sits on line 3 (the empty line after `print 1`), not line 2.
-    expect(result.stderr).toContain("(line 3)");
+    // from sits at line 3, column 1 — the empty line after `print 1`.
+    expect(result.stderr).toContain(
+      "missing-end.snx:3:1: error: Expected 'end' to close the 'if'",
+    );
+    expect(result.stderr).not.toContain("    at ");
+  });
+
+  test("the frame underlines the whole offending token", () => {
+    const result = cli(`${FIXTURES}/squashed-statements.snx`);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "squashed-statements.snx:1:9: error: Expected end of statement but found 'print'",
+    );
+    expect(result.stderr).toContain("print 1 print 2");
+    // The second `print` (5 characters) is underlined, not just its first char.
+    expect(result.stderr).toContain("^".repeat(5));
   });
 });

@@ -37,14 +37,25 @@ import type {
   VarDecl,
 } from "./ast";
 
-/** Raised for malformed token streams; `line` is 1-based. Mirrors `LexerError`. */
+/**
+ * Raised for malformed token streams. `line` and `column` are 1-based.
+ * Mirrors `LexerError` so diagnostics can be rendered the same way.
+ */
 export class ParserError extends Error {
   readonly line: number;
+  readonly column: number;
+  /** How many characters the error spans; used to underline the source. */
+  readonly length: number;
+  /** The message on its own, without the appended `(line N)` context. */
+  readonly reason: string;
 
-  constructor(message: string, line: number) {
-    super(`${message} (line ${line})`);
+  constructor(reason: string, line: number, column: number, length = 1) {
+    super(`${reason} (line ${line})`);
     this.name = "ParserError";
+    this.reason = reason;
     this.line = line;
+    this.column = column;
+    this.length = length;
   }
 }
 
@@ -418,7 +429,13 @@ export class Parser {
     while (this.peek().type === TokenType.NEWLINE) this.advance();
   }
 
+  /** Build an error positioned at `token`, spanning its whole lexeme. */
   private error(token: Token, message: string): ParserError {
-    return new ParserError(message, token.line);
+    return new ParserError(
+      message,
+      token.line,
+      token.column,
+      Math.max(token.lexeme.length, 1),
+    );
   }
 }

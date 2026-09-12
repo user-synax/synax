@@ -34,6 +34,15 @@ bun run src/cli.ts examples/loop.snx
 
 The compiler prints JavaScript to stdout and diagnostics to stderr, exiting
 non-zero on a lexer, parser, or file error, so it works in a shell pipeline.
+Diagnostics point at the source:
+
+```
+examples/bad.snx:1:7: error: Unexpected character "@"
+  1 | print @
+    |       ^
+```
+
+Set `SYNAX_DEBUG=1` to include a stack trace for an internal compiler error.
 
 There is also a `bun run build` script that bundles the CLI into `dist/`.
 

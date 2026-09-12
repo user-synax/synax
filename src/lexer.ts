@@ -74,16 +74,26 @@ export interface Token {
   readonly value?: string | number;
   /** 1-based line the token starts on. */
   readonly line: number;
+  /** 1-based column of the token's first character. */
+  readonly column: number;
 }
 
-/** Raised for malformed input; `line` is 1-based. */
+/** Raised for malformed input. `line` and `column` are 1-based. */
 export class LexerError extends Error {
   readonly line: number;
+  readonly column: number;
+  /** How many characters the error spans; used to underline the source. */
+  readonly length: number;
+  /** The message on its own, without the appended `(line N)` context. */
+  readonly reason: string;
 
-  constructor(message: string, line: number) {
-    super(`${message} (line ${line})`);
+  constructor(reason: string, line: number, column: number, length = 1) {
+    super(`${reason} (line ${line})`);
     this.name = "LexerError";
+    this.reason = reason;
     this.line = line;
+    this.column = column;
+    this.length = length;
   }
 }
 
@@ -161,9 +171,16 @@ export class Lexer {
 
   private index = 0;
   private line = 1;
+  /** Index of the first character on the current line, for column math. */
+  private lineStart = 0;
 
   constructor(source: string) {
     this.source = source;
+  }
+
+  /** 1-based column of the cursor. */
+  private get column(): number {
+    return this.index - this.lineStart + 1;
   }
 
   /**
@@ -177,6 +194,7 @@ export class Lexer {
     // Reset so a single Lexer instance can be tokenized more than once.
     this.index = 0;
     this.line = 1;
+    this.lineStart = 0;
 
     const tokens: Token[] = [];
 
@@ -192,9 +210,15 @@ export class Lexer {
       }
 
       if (char === "\n") {
-        tokens.push({ type: TokenType.NEWLINE, lexeme: "\n", line: this.line });
+        tokens.push({
+          type: TokenType.NEWLINE,
+          lexeme: "\n",
+          line: this.line,
+          column: this.column,
+        });
         this.index++;
         this.line++;
+        this.lineStart = this.index;
         continue;
       }
 
@@ -232,10 +256,16 @@ export class Lexer {
       throw new LexerError(
         `Unexpected character ${JSON.stringify(char)}`,
         this.line,
+        this.column,
       );
     }
 
-    tokens.push({ type: TokenType.EOF, lexeme: "", line: this.line });
+    tokens.push({
+      type: TokenType.EOF,
+      lexeme: "",
+      line: this.line,
+      column: this.column,
+    });
     return tokens;
   }
 
@@ -256,13 +286,19 @@ export class Lexer {
    */
   private skipBlockComment(): void {
     const startLine = this.line;
+    const startColumn = this.column;
     this.index += 2; // the `/#`
 
     while (true) {
       const char = this.source[this.index];
 
       if (char === undefined) {
-        throw new LexerError("Unterminated multi-line comment", startLine);
+        throw new LexerError(
+          "Unterminated multi-line comment",
+          startLine,
+          startColumn,
+          2,
+        );
       }
 
       if (char === "#" && this.source[this.index + 1] === "/") {
@@ -270,7 +306,13 @@ export class Lexer {
         return;
       }
 
-      if (char === "\n") this.line++;
+      if (char === "\n") {
+        this.line++;
+        this.index++;
+        this.lineStart = this.index;
+        continue;
+      }
+
       this.index++;
     }
   }
@@ -278,6 +320,7 @@ export class Lexer {
   /** Scan a double-quoted string, decoding escapes. */
   private readString(): Token {
     const line = this.line;
+    const column = this.column;
     const start = this.index;
     this.index++; // the opening quote
 
@@ -289,13 +332,13 @@ export class Lexer {
       // A string may not span lines, so a line break here means the closing
       // quote is missing.
       if (char === undefined || char === "\n") {
-        throw new LexerError("Unterminated string", line);
+        throw new LexerError("Unterminated string", line, column);
       }
 
       if (char === '"') {
         this.index++; // the closing quote
         const lexeme = this.source.slice(start, this.index);
-        return { type: TokenType.STRING, lexeme, value, line };
+        return { type: TokenType.STRING, lexeme, value, line, column };
       }
 
       if (char === "\\") {
@@ -306,6 +349,8 @@ export class Lexer {
           throw new LexerError(
             `Invalid escape sequence \\${escaped ?? ""}`,
             this.line,
+            this.column,
+            2,
           );
         }
 
@@ -322,6 +367,7 @@ export class Lexer {
   /** Scan an integer or float literal. No leading dots, no exponents. */
   private readNumber(): Token {
     const line = this.line;
+    const column = this.column;
     const start = this.index;
 
     while (isDigit(this.source[this.index])) this.index++;
@@ -337,18 +383,30 @@ export class Lexer {
     }
 
     const lexeme = this.source.slice(start, this.index);
-    return { type: TokenType.NUMBER, lexeme, value: Number(lexeme), line };
+    return {
+      type: TokenType.NUMBER,
+      lexeme,
+      value: Number(lexeme),
+      line,
+      column,
+    };
   }
 
   /** Scan an identifier, then reclassify it if it is a keyword. */
   private readIdentifier(): Token {
     const line = this.line;
+    const column = this.column;
     const start = this.index;
 
     while (isIdentifierPart(this.source[this.index])) this.index++;
 
     const lexeme = this.source.slice(start, this.index);
-    return { type: KEYWORDS.get(lexeme) ?? TokenType.IDENT, lexeme, line };
+    return {
+      type: KEYWORDS.get(lexeme) ?? TokenType.IDENT,
+      lexeme,
+      line,
+      column,
+    };
   }
 
   /**
@@ -357,6 +415,7 @@ export class Lexer {
    */
   private readOperator(): Token | undefined {
     const line = this.line;
+    const column = this.column;
 
     // Maximal munch: try two characters before one, so `>=`, `==`, `!=`, `<=`
     // and `..` win over their one-character prefixes.
@@ -364,7 +423,7 @@ export class Lexer {
     const twoType = TWO_CHAR_OPERATORS.get(two);
     if (twoType !== undefined) {
       this.index += 2;
-      return { type: twoType, lexeme: two, line };
+      return { type: twoType, lexeme: two, line, column };
     }
 
     const one = this.source[this.index];
@@ -374,6 +433,6 @@ export class Lexer {
     if (oneType === undefined) return undefined;
 
     this.index += 1;
-    return { type: oneType, lexeme: one, line };
+    return { type: oneType, lexeme: one, line, column };
   }
 }
