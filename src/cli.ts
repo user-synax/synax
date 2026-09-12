@@ -5,17 +5,14 @@
  * Usage:
  *   bun run src/cli.ts <file>
  *
- * TODO: the pipeline below is wired up but every stage is still a stub, so
- * running this today throws "not implemented". Remaining work:
- *   - resolve the path and read the source file (done, but error handling for
- *     missing/unreadable files still needs to be added)
- *   - lex -> parse -> generate
- *   - decide where the output goes (stdout vs. a `.js` file next to the input)
- *   - surface lexer/parser errors with file name, line, and column
+ * Reads a Synax source file, runs it through the pipeline
+ * (`Lexer` -> `Parser` -> `generate`) and writes the resulting JavaScript to
+ * stdout. Diagnostics go to stderr with a non-zero exit code, so the CLI is
+ * usable from a shell pipeline.
  */
 import { generate } from "./codegen";
-import { Lexer } from "./lexer";
-import { Parser } from "./parser";
+import { Lexer, LexerError } from "./lexer";
+import { Parser, ParserError } from "./parser";
 
 const USAGE = "Usage: synax <file>";
 
@@ -30,16 +27,31 @@ export async function main(
     return;
   }
 
-  // TODO: handle a missing file / unreadable path with a friendly message.
-  const source = await Bun.file(filePath).text();
+  let source: string;
+  try {
+    source = await Bun.file(filePath).text();
+  } catch {
+    console.error(`synax: cannot read '${filePath}'`);
+    process.exitCode = 1;
+    return;
+  }
 
-  // TODO: these all throw until the individual stages are implemented.
-  const tokens = new Lexer(source).tokenize();
-  const ast = new Parser(tokens).parse();
-  const output = generate(ast);
+  try {
+    const tokens = new Lexer(source).tokenize();
+    const ast = new Parser(tokens).parse();
+    // `generate` returns source with no trailing newline; console.log adds one.
+    console.log(generate(ast));
+  } catch (error) {
+    // Lexer and parser errors already carry a line number in their message,
+    // so prefixing the file is enough to make a usable diagnostic.
+    if (error instanceof LexerError || error instanceof ParserError) {
+      console.error(`${filePath}: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
 
-  // TODO: write `output` to stdout, or to a file when an `--out` flag is given.
-  console.log(output);
+    throw error;
+  }
 }
 
 if (import.meta.main) {

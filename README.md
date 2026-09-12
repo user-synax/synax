@@ -8,9 +8,14 @@ grammar and semantics lives in [SPEC.md](./SPEC.md).
 
 ## Status
 
-**Scaffolding only.** The lexer, parser, and code generator are stubs that throw
-`not implemented` errors. Look for the `TODO` comments in `src/` to find where
-each stage's logic belongs.
+The pipeline is implemented end to end: source is lexed, parsed into an AST, and
+compiled to JavaScript. See SPEC.md §9 for what is deliberately out of scope.
+
+Two semantics were decided while building the code generator:
+
+- `for i in 1..5` is **inclusive** of the upper bound (compiles to `i <= 5`).
+- `+` keeps JavaScript's coercion, so `"n=" + 5` concatenates rather than
+erroring.
 
 ## Requirements
 
@@ -21,10 +26,14 @@ No external dependencies are used; everything runs on the Bun standard library.
 ## Getting started
 
 ```sh
-bun install                 # install dependencies (none yet)
-bun test                    # run the test suite
-bun run src/cli.ts <file>   # compile a Synax source file
+bun install                       # install dependencies (none yet)
+bun test                          # run the test suite
+bun run src/cli.ts <file>         # compile a Synax source file to stdout
+bun run src/cli.ts examples/loop.snx
 ```
+
+The compiler prints JavaScript to stdout and diagnostics to stderr, exiting
+non-zero on a lexer, parser, or file error, so it works in a shell pipeline.
 
 There is also a `bun run build` script that bundles the CLI into `dist/`.
 
@@ -38,5 +47,6 @@ There is also a `bun run build` script that bundles the CLI into `dist/`.
 | `src/codegen.ts` | AST → JavaScript                     |
 | `src/cli.ts`     | Command-line entrypoint              |
 | `src/index.ts`   | Public API re-exports                |
+| `examples/`      | Sample `.snx` programs               |
 | `tests/`         | Test suite (`bun test`)              |
 | `SPEC.md`        | Language specification               |
